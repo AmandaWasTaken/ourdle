@@ -1,0 +1,10 @@
+get random word from dict -> 
+init window -> 
+render empty grid ->
+begin main loop ->
+poll kb inputs ->
+(if enter pressed) -> 
+	check letter correctness 
+	draw entered word 
+(if backspace pressed) ->
+	remove last letter
