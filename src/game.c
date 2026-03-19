@@ -2,7 +2,12 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
-#include <RLWindow.h>
+
+#if __has_include(<RLWindow.h>)
+	#include <RLWindow.h>
+#else
+	#include "../lib/RLWindow.h"
+#endif
 #include <stdio.h>
 #include <unistd.h>
 #include <stdint.h>
@@ -72,7 +77,7 @@ void game_over(RLWindow* win, GameState gs, Font font, const char* word){
 	}
 
 	const int restart_font_size = 48;
-	int restart_text_w = MeasureText(restart_text, restart_font_size);
+	UNUSED int restart_text_w = MeasureText(restart_text, restart_font_size);
 	Vector2 restart_text_pos = {100, 33};
 	DrawTextEx(font, restart_text, restart_text_pos, restart_font_size,
 				0, RESCOLOR);
@@ -252,7 +257,7 @@ void check_guess(Cell* cells, char word[6], const char* target, GameState* gs){
 }
 
 void poll_inputs(UNUSED RLWindow* w, Grid* grid, const char* target, 
-		bool* warn, float* warn_timer, GameState* gs, Font font){
+		bool* warn, float* warn_timer, GameState* gs, UNUSED Font font){
 	
 	static int curr_col = 0;
 	static int curr_row = 0;

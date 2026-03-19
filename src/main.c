@@ -1,7 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <raylib.h>
-#include <RLWindow.h>
+
+#if __has_include(<RLWindow.h>)
+	#include <RLWindow.h>
+#else
+	#include "../lib/RLWindow.h"
+#endif
+
 #include <types.h>
 
 #include "../lib/game.h"
