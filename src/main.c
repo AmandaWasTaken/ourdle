@@ -17,7 +17,6 @@ int main(int argc, char** argv){
 	};
 
 	char* target_word = get_word();
-	printf("Word: %s\n", target_word);
 
 	InitWindow(window.width, window.height, window.title);
 	Wordel(&window, target_word);

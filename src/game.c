@@ -4,6 +4,13 @@
 #include <stdlib.h>
 #include <RLWindow.h>
 #include <stdio.h>
+#include <unistd.h>
+#include <stdint.h>
+#include <sys/wait.h>
+#include "../lib/wutils.h"
+#include "../lib/getword.h"
+
+#define UNUSED __attribute((unused))
 
 typedef enum {
 	ONGOING = 0,
@@ -32,33 +39,48 @@ typedef struct {
 	int gapY;
 } Grid;
 
-void game_over(RLWindow* win, GameState gs){
+
+void game_over(RLWindow* win, GameState gs, Font font, const char* word){
 
 	const int font_size = 48;
 	char text[10];
 	int text_w = 0;
+	Vector2 pos;
+
+	const char* restart_text = "Press R to restart with a new word";
+	char sln_text[24];
+	snprintf(sln_text, sizeof(sln_text), "The Word Was %s", word);
 
 	switch(gs){
 		case WON:
 			strcpy(text, "You Win!");
 			text_w = MeasureText(text, font_size);
-			DrawText(text,
-				(win->width - text_w)/2,
-				(win->height - font_size),
-				font_size, DARKGREEN);
+			 pos = _get_text_pos((win->width - text_w)/2, 
+						  (win->height - font_size));
+			DrawTextEx(font, text, pos, font_size, 0, WINCOLOR);
 			break;
 		case LOST:
 			strcpy(text, "You Lost!");
 			text_w = MeasureText(text, font_size);
-			DrawText(text,
-				(win->width - text_w)/2,
-				(win->height - font_size),
-				font_size, RED);
+			pos = _get_text_pos((win->width - text_w)/2, 
+						  (win->height - font_size));
+			DrawTextEx(font, text, pos, font_size, 0, LOSECOLOR);
 			break;
 		default:
-			if(text)free(text);
+//			if(text)free(text);
 			return;
 	}
+
+	const int restart_font_size = 48;
+	int restart_text_w = MeasureText(restart_text, restart_font_size);
+	Vector2 restart_text_pos = {100, 33};
+	DrawTextEx(font, restart_text, restart_text_pos, restart_font_size,
+				0, RESCOLOR);
+
+	const int sln_font_size = 36;
+	Vector2 sln_text_pos = {strlen(sln_text) + 225,
+		win->height - sln_font_size - 50};
+	DrawTextEx(font, sln_text, sln_text_pos, sln_font_size, 0, RESCOLOR);
 }
 
 void _word_too_short_warning(RLWindow* w){
@@ -77,7 +99,7 @@ void _word_too_short_warning(RLWindow* w){
 			);
 }
 
-Grid initialize_grid(RLWindow* w){
+Grid initialize_grid(UNUSED RLWindow* w){
 
 	Grid grid = {
 		.row  = 6,
@@ -88,9 +110,9 @@ Grid initialize_grid(RLWindow* w){
 
 	const int cell_width  = 50;
 	const int cell_height = 60;
-	const int padding_x   = 170;
+/*	const int padding_x   = 170;
 	const int padding_y   = 120;
-
+*/
 	for(int row = 0; row < grid.row; row++){
 		for(int col = 0; col < grid.col; col++){
 			Rectangle rect = {
@@ -111,14 +133,15 @@ Color get_color(Cell_State state){
 		case CORRECT:   return DARKGREEN;
 		case WRONG_POS: return YELLOW;
 		case INCORRECT: return RED;
-		case NEUTRAL:   return DARKGRAY;
+		case NEUTRAL:   return CELL_NEUTRAL;
+		default: return DARKGRAY;
 	}
 }
 
-void draw_grid(RLWindow* w, Grid* grid){
+void draw_grid(UNUSED RLWindow* w, Grid* grid, Font font){
 
 	const int padding_left = 180;
-	const int padding_top = 90;
+	const int padding_top = 85;
 	Color color;
 
 	for(int i = 0; i < grid->row; i++){
@@ -133,14 +156,43 @@ void draw_grid(RLWindow* w, Grid* grid){
 
 			color = get_color(grid->cells[i][j].state); 
 			DrawRectangleLinesEx(rect, 4.0f, color);
-			DrawText(grid->cells[i][j].current_letter,
-				padding_left + 10 +
-				grid->cells[i][j].rect.x,
-				padding_top +
-				grid->cells[i][j].rect.y,
-				64, RED);
+
+			Vector2 text_pos = _get_text_pos(padding_left + 7 +
+					grid->cells[i][j].rect.x, padding_top - 5  +
+					grid->cells[i][j].rect.y);
+			DrawTextEx(font, grid->cells[i][j].current_letter, 
+					   text_pos, 56, 0, LETTERCOLOR);
 		}
 	}
+}
+
+bool invalid_guess(char word[6]){
+
+	word[strcspn(word, "\n")] = '\0';
+
+	pid_t pid = fork();
+	if(pid == 0){
+		char* args[] = {
+			"grep",
+			"-Fx",
+			(char *)word,
+			"/etc/dictionaries-common/words",
+			NULL,
+		};
+
+		execvp("grep", args);
+		_exit(1);
+	}
+
+	int status;
+	waitpid(pid, &status, 0);
+	if(WIFEXITED(status)){
+		int code = WEXITSTATUS(status);
+		if(code == 0) return false;
+		if(code == 1) return true;
+	}
+	
+	return true;
 }
 
 void to_lower(char* s){
@@ -155,6 +207,12 @@ void check_guess(Cell* cells, char word[6], const char* target, GameState* gs){
 	to_lower(target_copy);
 	int n_correct = 0;
 	int n_incorrect = 0;
+
+/*	if(invalid_guess(word)){
+		printf("invalid word!!!\n");
+		return;
+	}
+	*/
 
 	// Check correct
 	for(int i = 0; i < 5; i++){
@@ -183,7 +241,7 @@ void check_guess(Cell* cells, char word[6], const char* target, GameState* gs){
 		if(cells[i].state != NEUTRAL) continue;
 
 		for(int j = 0; j < 5; j++){
-			if(strchr(target, word[j] == NULL)){
+			if(strchr(target, word[j]) == NULL){
 				cells[i].state = INCORRECT;
 				n_incorrect++;
 			}
@@ -193,8 +251,8 @@ void check_guess(Cell* cells, char word[6], const char* target, GameState* gs){
 	if(n_correct == 5) *gs = WON;	
 }
 
-void poll_inputs(RLWindow* w, Grid* grid, const char* target, 
-		bool* warn, float* warn_timer, GameState* gs){
+void poll_inputs(UNUSED RLWindow* w, Grid* grid, const char* target, 
+		bool* warn, float* warn_timer, GameState* gs, Font font){
 	
 	static int curr_col = 0;
 	static int curr_row = 0;
@@ -203,6 +261,7 @@ void poll_inputs(RLWindow* w, Grid* grid, const char* target,
 	int ch = GetCharPressed();
 
 	if(IsKeyPressed(KEY_BACKSPACE)){
+
 		if(curr_col - 1 < 0) return;
 		curr_col--;
 		grid->cells[curr_row][curr_col].current_letter[0] = '\0';
@@ -227,29 +286,46 @@ void poll_inputs(RLWindow* w, Grid* grid, const char* target,
 		ch = GetCharPressed();
 		curr_col++;
 	}
-	if(curr_row == 6 && *gs != WON) *gs = LOST;
+
+	if(curr_row == 6 && *gs != WON){
+		*gs = LOST;
+		curr_row = 0;
+		curr_col = 0;
+	}
+	if(*gs == WON) {
+		curr_row = 0;
+		curr_col = 0;
+	}
 }
 
 void Wordel(RLWindow* window, const char* target_word){
 
 	Grid grid = initialize_grid(window);
+	Font font = LoadFont("./assets/RobotoSlab-Medium.ttf");
 	GameState gs = ONGOING;
 	bool word_too_short = false;
 	float warn_timer = 0.0f;
 	printf("TARGET: %s\n", target_word);
-	bool running = true;
 
 	while(!WindowShouldClose()){
 
+		if((gs == WON || gs == LOST) && IsKeyPressed('R')){
+			grid = initialize_grid(window);
+			gs = ONGOING;
+			word_too_short = false;
+			warn_timer = 0.0f;
+			target_word = get_word();
+		}
+
 		BeginDrawing();
-		ClearBackground(RAYWHITE);
+		ClearBackground(BGCOLOR);
 		DrawFPS(10, 10);
 
-		draw_grid(window, &grid);
+		draw_grid(window, &grid, font);
 
 		if(gs == ONGOING){
 			poll_inputs(window, &grid, target_word, &word_too_short, 
-					&warn_timer, &gs);
+					&warn_timer, &gs, font);
 		}
 
 		if(word_too_short){
@@ -259,11 +335,12 @@ void Wordel(RLWindow* window, const char* target_word){
 		}
 
 		if(gs == WON || gs == LOST){
-			game_over(window, gs);
+			game_over(window, gs, font, target_word);
 		}
 				
 		EndDrawing();
 	}
+	UnloadFont(font);
 
 //	free(&target_word);
 	return;
