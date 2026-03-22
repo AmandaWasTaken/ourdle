@@ -8,8 +8,6 @@
 	#include "../lib/RLWindow.h"
 #endif
 
-#include <types.h>
-
 #include "../lib/game.h"
 #include "../lib/getword.h"
 

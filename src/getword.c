@@ -1,8 +1,15 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <types.h>
 #include <time.h>
+
+#if __has_include(<types.h>)
+	#include <types.h>
+#else
+	#include <stdint.h>
+	#define u64 uint64_t
+	#define i32 int
+#endif
 
 #define MAX_LINE 256
 #define MAX_MATCHES 50000
